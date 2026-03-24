@@ -131,3 +131,4 @@ This project is not official and is not affiliated with, endorsed by, or support
 - Runtime flow: [docs/architecture-flow.md](docs/architecture-flow.md)
 - Carry mental map: [docs/carry-capacity-mental-map.md](docs/carry-capacity-mental-map.md)
 - Feasibility notes: [docs/smart-carry-feasibility.md](docs/smart-carry-feasibility.md)
+- Nexus listing text: [docs/nexus-listing.md](docs/nexus-listing.md)
