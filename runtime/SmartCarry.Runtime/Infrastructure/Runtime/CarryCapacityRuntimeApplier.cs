@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using NSMedieval.Components;
 using NSMedieval.State;
@@ -10,7 +11,10 @@ namespace SmartCarry.Runtime;
 /// </summary>
 internal static class CarryCapacityRuntimeApplier
 {
+    private const double LiveProfileCacheLifetimeSeconds = 0.25d;
+
     private static readonly ConditionalWeakTable<Storage, BaselineCapacityEntry> BaselineCapacityByStorage = new();
+    private static readonly ConditionalWeakTable<HumanoidInstance, LiveProfileCacheEntry> LiveProfileCacheByHumanoid = new();
     private static readonly ConditionalWeakTable<HumanoidInstance, ProfileTraceEntry> TracedProfilesByHumanoid = new();
 
     [ThreadStatic]
@@ -82,7 +86,7 @@ internal static class CarryCapacityRuntimeApplier
         }
 
         TraceProfile(humanoid, snapshot, profile, "capacity");
-        ApplyIfNeeded(humanoid.Storage);
+        ApplyCapacityIfNeeded(humanoid.Storage, snapshot, profile);
         effectiveCapacity = profile.EffectiveCapacity;
         return true;
     }
@@ -139,27 +143,7 @@ internal static class CarryCapacityRuntimeApplier
             return;
         }
 
-        var safeSnapshot = snapshot!;
-        var safeProfile = profile!;
-        var currentCapacity = storage.StorageBase.Capacity;
-        if (currentCapacity == safeProfile.EffectiveCapacity)
-        {
-            DiagnosticTrace.InfoSample("carry.runtime", "ApplyIfNeeded.NoChange", $"ApplyIfNeeded no change for {humanoid}: capacity={currentCapacity}");
-            return;
-        }
-
-        isApplying = true;
-        try
-        {
-            storage.SetStorageCapacity(safeProfile.EffectiveCapacity);
-            DiagnosticTrace.Trace(
-                "carry.apply",
-                $"Applied carry capacity for {humanoid}: {currentCapacity} -> {safeProfile.EffectiveCapacity}, base={safeSnapshot.BaseCapacity}, health={safeSnapshot.NormalizedHealth:0.00}, sleep={safeSnapshot.NormalizedSleep:0.00}, wounded={safeSnapshot.IsWounded}, body={safeSnapshot.BodyType}, height={safeSnapshot.Height:0.00}, weight={safeSnapshot.WeightCoefficient:0.00}, frame={safeProfile.FrameFactor:0.000}");
-        }
-        finally
-        {
-            isApplying = false;
-        }
+        ApplyCapacityIfNeeded(storage, snapshot, profile);
     }
 
     private static bool TryBuildProfile(
@@ -191,10 +175,16 @@ internal static class CarryCapacityRuntimeApplier
             return false;
         }
 
-        var baselineCapacity = GetBaselineCapacity(storage);
+        var baselineCapacity = GetBaselineCapacity(storage, hasHumanoidOwner: true);
+        if (TryGetCachedProfile(humanoid, baselineCapacity, out snapshot, out inputs, out profile))
+        {
+            return true;
+        }
+
         snapshot = CreatureCarrySignalsReader.Read(humanoid, baselineCapacity);
         inputs = CarryCapacityInputsFactory.Create(snapshot);
         profile = CarryCapacityCalculator.Calculate(inputs);
+        StoreCachedProfile(humanoid, baselineCapacity, snapshot, inputs, profile);
         return true;
     }
 
@@ -241,12 +231,11 @@ internal static class CarryCapacityRuntimeApplier
         }
     }
 
-    private static int GetBaselineCapacity(Storage storage)
+    private static int GetBaselineCapacity(Storage storage, bool hasHumanoidOwner = false)
     {
         var entry = BaselineCapacityByStorage.GetOrCreateValue(storage);
         if (!entry.Initialized)
         {
-            var hasHumanoidOwner = CarryStorageOwnerResolver.Resolve(storage) is { HasDisposed: false };
             entry.Capacity = CarryBaselineCapacityResolver.Resolve(
                 storage.StorageBase.Capacity,
                 SmartCarrySettings.DefaultBaseCarryCapacity,
@@ -255,6 +244,81 @@ internal static class CarryCapacityRuntimeApplier
         }
 
         return entry.Capacity;
+    }
+
+    private static bool TryGetCachedProfile(
+        HumanoidInstance humanoid,
+        int baselineCapacity,
+        out CarrySignalSnapshot? snapshot,
+        out CarryCapacityInputs? inputs,
+        out CarryCapacityProfile? profile)
+    {
+        snapshot = null;
+        inputs = null;
+        profile = null;
+
+        if (!LiveProfileCacheByHumanoid.TryGetValue(humanoid, out var entry) ||
+            !entry.Initialized ||
+            !TimedProfileCache.CanReuse(entry.Cache, baselineCapacity, GetNowSeconds()) ||
+            entry.Snapshot == null ||
+            entry.Inputs == null ||
+            entry.Profile == null)
+        {
+            return false;
+        }
+
+        snapshot = entry.Snapshot;
+        inputs = entry.Inputs;
+        profile = entry.Profile;
+        return true;
+    }
+
+    private static void StoreCachedProfile(
+        HumanoidInstance humanoid,
+        int baselineCapacity,
+        CarrySignalSnapshot snapshot,
+        CarryCapacityInputs inputs,
+        CarryCapacityProfile profile)
+    {
+        var entry = LiveProfileCacheByHumanoid.GetOrCreateValue(humanoid);
+        entry.Cache = TimedProfileCache.Create(baselineCapacity, GetNowSeconds(), LiveProfileCacheLifetimeSeconds);
+        entry.Snapshot = snapshot;
+        entry.Inputs = inputs;
+        entry.Profile = profile;
+        entry.Initialized = true;
+    }
+
+    private static void ApplyCapacityIfNeeded(
+        Storage storage,
+        CarrySignalSnapshot? snapshot,
+        CarryCapacityProfile? profile)
+    {
+        var safeSnapshot = snapshot!;
+        var safeProfile = profile!;
+        var currentCapacity = storage.StorageBase.Capacity;
+        if (currentCapacity == safeProfile.EffectiveCapacity)
+        {
+            DiagnosticTrace.InfoSample("carry.runtime", "ApplyIfNeeded.NoChange", $"ApplyIfNeeded no change: capacity={currentCapacity}");
+            return;
+        }
+
+        isApplying = true;
+        try
+        {
+            storage.SetStorageCapacity(safeProfile.EffectiveCapacity);
+            DiagnosticTrace.Trace(
+                "carry.apply",
+                $"Applied carry capacity: {currentCapacity} -> {safeProfile.EffectiveCapacity}, base={safeSnapshot.BaseCapacity}, health={safeSnapshot.NormalizedHealth:0.00}, sleep={safeSnapshot.NormalizedSleep:0.00}, wounded={safeSnapshot.IsWounded}, body={safeSnapshot.BodyType}, height={safeSnapshot.Height:0.00}, weight={safeSnapshot.WeightCoefficient:0.00}, frame={safeProfile.FrameFactor:0.000}");
+        }
+        finally
+        {
+            isApplying = false;
+        }
+    }
+
+    private static double GetNowSeconds()
+    {
+        return Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
     }
 
     private static CarrySignalSnapshot ApplyPreviewOverrides(
@@ -338,6 +402,19 @@ internal static class CarryCapacityRuntimeApplier
     private sealed class BaselineCapacityEntry
     {
         public int Capacity { get; set; }
+
+        public bool Initialized { get; set; }
+    }
+
+    private sealed class LiveProfileCacheEntry
+    {
+        public TimedProfileCache.Entry Cache { get; set; }
+
+        public CarrySignalSnapshot? Snapshot { get; set; }
+
+        public CarryCapacityInputs? Inputs { get; set; }
+
+        public CarryCapacityProfile? Profile { get; set; }
 
         public bool Initialized { get; set; }
     }
