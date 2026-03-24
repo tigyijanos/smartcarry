@@ -6,6 +6,42 @@ SmartCarry is an unofficial carry-capacity mod for Going Medieval.
 
 SmartCarry stops treating every settler like they should carry the same amount.
 
+## Vanilla Vs SmartCarry
+
+```text
+Vanilla logic
+
+ (╯°□°）╯
+ <|>
+ / \
+
+same carry for everyone
+
+injured   ✔
+exhausted ✔
+half-dead ✔
+
+balanced  ✔
+
+
+SmartCarry
+
+ (⌐■_■)
+ <|>
+ / \
+
+carry depends on:
+
+✔ health
+✔ sleep
+✔ body
+✔ age
+✔ height
+✔ weight
+
+...makes a bit more sense
+```
+
 Right now a settler's effective carry capacity is based on:
 - their normal game carry capacity
 - current health
