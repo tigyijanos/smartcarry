@@ -1,0 +1,17 @@
+.git/
+.vs/
+.idea/
+
+# Build outputs
+bin/
+obj/
+
+# Logs and caches
+*.log
+*.cache
+
+# User-specific files
+*.user
+*.suo
+*.nupkg
+Directory.Build.props

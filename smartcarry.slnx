@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/runtime/">
+    <Project Path="runtime/SmartCarry.Runtime.Tests/SmartCarry.Runtime.Tests.csproj" />
+    <Project Path="runtime/SmartCarry.Runtime/SmartCarry.Runtime.csproj" />
+  </Folder>
+</Solution>
