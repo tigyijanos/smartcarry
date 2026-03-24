@@ -9,17 +9,13 @@
 
 ## Commit Attribution
 
-When a change is materially co-authored, add one or more `Co-authored-by` trailers:
-
-```text
-Co-authored-by: Full Name <email@example.com>
-```
-
-Example used in this project:
+Add the Codex co-author trailer to every commit in this repository:
 
 ```text
 Co-authored-by: Codex (OpenAI) <noreply@openai.com>
 ```
+
+- If there are additional human or tool co-authors, add them as extra trailers below the Codex trailer.
 
 ## Repository Hygiene
 
