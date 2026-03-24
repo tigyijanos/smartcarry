@@ -44,6 +44,44 @@ Co-authored-by: Codex (OpenAI) <noreply@openai.com>
   - `README.txt`
 - `README.txt` in the release asset should be a short install-focused text, not the full repository README.
 - Keep the release asset structure stable across versions unless there is a deliberate packaging change.
+- Recommended `README.txt` shape:
+
+```text
+Smart Carry vX.Y.Z
+
+Install:
+1. Install BepInEx 5 for Going Medieval.
+2. Extract this archive into your Going Medieval game folder.
+3. Verify that SmartCarry.Runtime.dll ends up at:
+   BepInEx\\plugins\\SmartCarry.Runtime\\SmartCarry.Runtime.dll
+4. Restart the game.
+
+Optional config after first launch:
+BepInEx\\config\\hu.tigyi.goingmedieval.smartcarry.runtime.cfg
+```
+
+- Recommended GitHub release note shape:
+
+```md
+# Smart Carry vX.Y.Z
+
+One-line release summary.
+
+## Highlights
+
+- First user-visible change
+- Second user-visible change
+- Third user-visible change
+
+## Installation
+
+1. Install BepInEx 5 for Going Medieval.
+2. Extract `SmartCarry-vX.Y.Z.zip` into your Going Medieval game folder.
+3. Restart the game.
+
+Optional config after first launch:
+`BepInEx\\config\\hu.tigyi.goingmedieval.smartcarry.runtime.cfg`
+```
 
 ## Validation Expectations
 
